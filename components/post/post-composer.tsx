@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, startTransition, type PointerEvent as ReactPointerEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -33,7 +33,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const [pending, startIntentTransition] = useTransition();
   const [reorderPending, startReorderTransition] = useTransition();
 
   const [recipeId, setRecipeId] = useState<string | null>(props.initial?.recipe.id ?? null);
@@ -79,29 +79,32 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
 
   useEffect(() => {
     if (!props.initial) return;
-    setRecipeId(props.initial.recipe.id);
-    setImageRows((props.initial.images ?? []).map((img) => ({ id: img.id, imageUrl: img.imageUrl })));
-    setRawInputText(props.initial.recipe.rawInputText ?? "");
-    setKosherCategory(props.initial.recipe.kosherCategory);
-    setSpecialBadges(props.initial.specialBadges);
-    setTagText(props.initial.tags.join(", "));
-    setTitle(props.initial.recipe.title ?? "");
-    setDescription(props.initial.recipe.description ?? "");
-    setIngredients(
-      props.initial.recipe.ingredientsNormalized?.length
-        ? props.initial.recipe.ingredientsNormalized
-        : [{ item: "", amount: "", notes: "" }]
-    );
-    setSteps(
-      props.initial.recipe.stepsNormalized?.length
-        ? props.initial.recipe.stepsNormalized
-        : [{ stepNumber: 1, instruction: "" }]
-    );
-    setPrepMinutes(props.initial.recipe.prepMinutes ?? "");
-    setCookMinutes(props.initial.recipe.cookMinutes ?? "");
-    setTotalMinutes(props.initial.recipe.totalMinutes ?? "");
-    setServings(props.initial.recipe.servings ?? "");
-    setNotes(props.initial.recipe.notes ?? "");
+    const data = props.initial;
+    startTransition(() => {
+      setRecipeId(data.recipe.id);
+      setImageRows((data.images ?? []).map((img) => ({ id: img.id, imageUrl: img.imageUrl })));
+      setRawInputText(data.recipe.rawInputText ?? "");
+      setKosherCategory(data.recipe.kosherCategory);
+      setSpecialBadges(data.specialBadges);
+      setTagText(data.tags.join(", "));
+      setTitle(data.recipe.title ?? "");
+      setDescription(data.recipe.description ?? "");
+      setIngredients(
+        data.recipe.ingredientsNormalized?.length
+          ? data.recipe.ingredientsNormalized
+          : [{ item: "", amount: "", notes: "" }]
+      );
+      setSteps(
+        data.recipe.stepsNormalized?.length
+          ? data.recipe.stepsNormalized
+          : [{ stepNumber: 1, instruction: "" }]
+      );
+      setPrepMinutes(data.recipe.prepMinutes ?? "");
+      setCookMinutes(data.recipe.cookMinutes ?? "");
+      setTotalMinutes(data.recipe.totalMinutes ?? "");
+      setServings(data.recipe.servings ?? "");
+      setNotes(data.recipe.notes ?? "");
+    });
   }, [props.initial]);
 
   const recipeIdInUrl = searchParams.get("recipeId");
@@ -335,7 +338,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   }
 
   async function onAi() {
-    startTransition(async () => {
+    startIntentTransition(async () => {
       try {
         const id = await ensureDraft();
         const res = await generateAiAction(id);
@@ -352,7 +355,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   }
 
   async function onPublish() {
-    startTransition(async () => {
+    startIntentTransition(async () => {
       try {
         const id = await ensureDraft();
         const res = await publishRecipeAction({
