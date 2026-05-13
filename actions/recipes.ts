@@ -111,6 +111,7 @@ export async function updateDraftAction(input: z.infer<typeof recipeDraftInputSc
     await replaceRecipeTags(recipeId, data.tags ?? []);
 
     revalidatePath("/post");
+    revalidatePath("/my-recipes");
     return { success: true as const, recipeId };
   }
 
@@ -150,6 +151,7 @@ export async function updateDraftAction(input: z.infer<typeof recipeDraftInputSc
   await replaceRecipeTags(recipeId, data.tags ?? []);
 
   revalidatePath("/post");
+  revalidatePath("/my-recipes");
   revalidatePath(`/recipe/${recipeId}`);
   return { success: true as const, recipeId };
 }

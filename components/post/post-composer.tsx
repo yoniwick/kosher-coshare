@@ -42,6 +42,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   const searchParams = useSearchParams();
   const [aiPending, startAiTransition] = useTransition();
   const [publishPending, startPublishTransition] = useTransition();
+  const [savePending, startSaveTransition] = useTransition();
   const [reorderPending, startReorderTransition] = useTransition();
 
   const [recipeId, setRecipeId] = useState<string | null>(props.initial?.recipe.id ?? null);
@@ -402,6 +403,39 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     });
   }
 
+  async function onSaveDraftNow() {
+    startSaveTransition(async () => {
+      try {
+        const id = await ensureDraft();
+        const res = await updateDraftAction({
+          recipeId: id,
+          rawInputText,
+          kosherCategory,
+          specialBadges,
+          tags,
+          title,
+          description,
+          ingredientsNormalized: ingredients,
+          stepsNormalized: steps,
+          prepMinutes: prepMinutes === "" ? null : prepMinutes,
+          cookMinutes: cookMinutes === "" ? null : cookMinutes,
+          totalMinutes: derivedTotalMinutes,
+          servings: servings || null,
+          notes: notes || null,
+          status: "DRAFT",
+        });
+        if (!res.success) {
+          toast.error("Could not save draft. Check your entries.");
+          return;
+        }
+        toast.success("Draft saved.");
+        router.push("/my-recipes");
+      } catch {
+        toast.error("Could not save draft.");
+      }
+    });
+  }
+
   async function onFiles(files: FileList | null) {
     if (!files?.length) return;
     const id = await ensureDraft();
@@ -439,7 +473,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     );
   }
 
-  const busy = aiPending || publishPending;
+  const busy = aiPending || publishPending || savePending;
 
   return (
     <div className="relative space-y-10 pb-24">
@@ -625,7 +659,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
             <Sparkles className="h-5 w-5" />
             Organize with AI
           </Button>
-          <Button type="button" variant="outline" className="rounded-2xl" disabled={busy} onClick={() => ensureDraft()}>
+          <Button type="button" variant="outline" className="rounded-2xl" disabled={busy} onClick={() => onSaveDraftNow()}>
             Save draft now
           </Button>
         </div>
