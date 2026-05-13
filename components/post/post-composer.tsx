@@ -19,9 +19,16 @@ import type { IngredientRow, StepRow } from "@/lib/db/schema/recipes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, UploadCloud, ChevronUp, ChevronDown, GripVertical, Trash2 } from "lucide-react";
+import { Sparkles, UploadCloud, ChevronUp, ChevronDown, GripVertical, Trash2, Loader2 } from "lucide-react";
 import { blobImageDisplayUrl } from "@/lib/blob/display-url";
 import { cn } from "@/lib/utils";
+
+function parseOptionalMinutes(raw: string): number | "" {
+  const t = raw.trim();
+  if (t === "") return "";
+  const n = Number.parseInt(t, 10);
+  return Number.isNaN(n) ? "" : n;
+}
 
 type InitialData = NonNullable<Awaited<ReturnType<typeof getEditableRecipe>>>;
 type ComposerImage = { id: string; imageUrl: string };
@@ -33,7 +40,8 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [pending, startIntentTransition] = useTransition();
+  const [aiPending, startAiTransition] = useTransition();
+  const [publishPending, startPublishTransition] = useTransition();
   const [reorderPending, startReorderTransition] = useTransition();
 
   const [recipeId, setRecipeId] = useState<string | null>(props.initial?.recipe.id ?? null);
@@ -58,7 +66,6 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
 
   const [prepMinutes, setPrepMinutes] = useState<number | "">(props.initial?.recipe.prepMinutes ?? "");
   const [cookMinutes, setCookMinutes] = useState<number | "">(props.initial?.recipe.cookMinutes ?? "");
-  const [totalMinutes, setTotalMinutes] = useState<number | "">(props.initial?.recipe.totalMinutes ?? "");
   const [servings, setServings] = useState(props.initial?.recipe.servings ?? "");
   const [notes, setNotes] = useState(props.initial?.recipe.notes ?? "");
 
@@ -101,7 +108,6 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
       );
       setPrepMinutes(data.recipe.prepMinutes ?? "");
       setCookMinutes(data.recipe.cookMinutes ?? "");
-      setTotalMinutes(data.recipe.totalMinutes ?? "");
       setServings(data.recipe.servings ?? "");
       setNotes(data.recipe.notes ?? "");
     });
@@ -123,6 +129,13 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     [tagText]
   );
 
+  const derivedTotalMinutes = useMemo(() => {
+    const p = prepMinutes === "" ? 0 : prepMinutes;
+    const c = cookMinutes === "" ? 0 : cookMinutes;
+    const sum = p + c;
+    return sum > 0 ? sum : null;
+  }, [prepMinutes, cookMinutes]);
+
   const autosaveSnapshotRef = useRef({
     recipeId: null as string | null,
     rawInputText: "",
@@ -135,7 +148,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     steps: [{ stepNumber: 1, instruction: "" }] as StepRow[],
     prepMinutes: "" as number | "",
     cookMinutes: "" as number | "",
-    totalMinutes: "" as number | "",
+    totalMinutes: null as number | null,
     servings: "",
     notes: "",
   });
@@ -153,7 +166,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
       steps,
       prepMinutes,
       cookMinutes,
-      totalMinutes,
+      totalMinutes: derivedTotalMinutes,
       servings,
       notes,
     };
@@ -169,7 +182,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     steps,
     prepMinutes,
     cookMinutes,
-    totalMinutes,
+    derivedTotalMinutes,
     servings,
     notes,
   ]);
@@ -198,7 +211,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
         stepsNormalized: s.steps,
         prepMinutes: s.prepMinutes === "" ? null : s.prepMinutes,
         cookMinutes: s.cookMinutes === "" ? null : s.cookMinutes,
-        totalMinutes: s.totalMinutes === "" ? null : s.totalMinutes,
+        totalMinutes: s.totalMinutes,
         servings: s.servings || null,
         notes: s.notes || null,
         status: "DRAFT",
@@ -338,7 +351,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   }
 
   async function onAi() {
-    startIntentTransition(async () => {
+    startAiTransition(async () => {
       try {
         const id = await ensureDraft();
         const res = await generateAiAction(id);
@@ -355,7 +368,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   }
 
   async function onPublish() {
-    startIntentTransition(async () => {
+    startPublishTransition(async () => {
       try {
         const id = await ensureDraft();
         const res = await publishRecipeAction({
@@ -371,7 +384,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
           tags,
           prepMinutes: prepMinutes === "" ? null : prepMinutes,
           cookMinutes: cookMinutes === "" ? null : cookMinutes,
-          totalMinutes: totalMinutes === "" ? null : totalMinutes,
+          totalMinutes: derivedTotalMinutes,
           servings: servings || null,
           notes: notes || null,
         });
@@ -426,8 +439,27 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     );
   }
 
+  const busy = aiPending || publishPending;
+
   return (
-    <div className="space-y-10 pb-24">
+    <div className="relative space-y-10 pb-24">
+      {aiPending ? (
+        <div
+          className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-[color:var(--paper)]/88 px-6 text-center backdrop-blur-md"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <Loader2 className="h-12 w-12 shrink-0 animate-spin text-[color:var(--vermilion)]" aria-hidden />
+          <div className="max-w-sm space-y-2">
+            <p className="font-serif text-xl text-[color:var(--ink)]">Organizing with AI</p>
+            <p className="text-sm leading-relaxed text-[color:var(--ink-muted)]">
+              Structuring your notes into title, ingredients, and steps. This can take a little while.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <header className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--ink-muted)]">
           Compose
@@ -587,13 +619,13 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
             type="button"
             variant="vermilion"
             className="rounded-2xl"
-            disabled={pending}
+            disabled={busy}
             onClick={() => onAi()}
           >
             <Sparkles className="h-5 w-5" />
             Organize with AI
           </Button>
-          <Button type="button" variant="outline" className="rounded-2xl" disabled={pending} onClick={() => ensureDraft()}>
+          <Button type="button" variant="outline" className="rounded-2xl" disabled={busy} onClick={() => ensureDraft()}>
             Save draft now
           </Button>
         </div>
@@ -708,9 +740,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
             <Input
               inputMode="numeric"
               value={prepMinutes}
-              onChange={(e) =>
-                setPrepMinutes(e.target.value === "" ? "" : Number.parseInt(e.target.value, 10))
-              }
+              onChange={(e) => setPrepMinutes(parseOptionalMinutes(e.target.value))}
             />
           </label>
           <label className="space-y-2 text-sm font-medium">
@@ -718,21 +748,19 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
             <Input
               inputMode="numeric"
               value={cookMinutes}
-              onChange={(e) =>
-                setCookMinutes(e.target.value === "" ? "" : Number.parseInt(e.target.value, 10))
-              }
+              onChange={(e) => setCookMinutes(parseOptionalMinutes(e.target.value))}
             />
           </label>
-          <label className="space-y-2 text-sm font-medium">
-            Total (min)
-            <Input
-              inputMode="numeric"
-              value={totalMinutes}
-              onChange={(e) =>
-                setTotalMinutes(e.target.value === "" ? "" : Number.parseInt(e.target.value, 10))
-              }
-            />
-          </label>
+          <div className="space-y-2 text-sm font-medium">
+            <span>Total (min)</span>
+            <div
+              className="flex min-h-12 items-center rounded-2xl border border-[color:var(--line)] bg-[color:var(--paper-2)] px-4 text-base text-[color:var(--ink)]"
+              aria-live="polite"
+            >
+              {derivedTotalMinutes != null ? derivedTotalMinutes : "—"}
+            </div>
+            <p className="text-xs font-normal text-[color:var(--ink-muted)]">Prep + cook (saved automatically)</p>
+          </div>
         </div>
 
         <label className="block space-y-2">
@@ -746,7 +774,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
         </label>
 
         <div className="flex flex-wrap gap-3 pt-2">
-          <Button type="button" variant="vermilion" className="rounded-2xl" disabled={pending} onClick={() => onPublish()}>
+          <Button type="button" variant="vermilion" className="rounded-2xl" disabled={busy} onClick={() => onPublish()}>
             Publish
           </Button>
         </div>
