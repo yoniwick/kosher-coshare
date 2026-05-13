@@ -6,6 +6,7 @@ import { KosherCategoryBadge, SpecialBadgeList } from "@/components/recipe/koshe
 import type { RecipeSearchRow } from "@/lib/recipes/search";
 import { VoteBookmarkBar } from "@/components/recipe/vote-bookmark-bar";
 import { CommentsPanel } from "@/components/recipe/comments-panel";
+import { RecipeRawNotesDrop } from "@/components/recipe/recipe-raw-notes-drop";
 import { ShareRecipeButton } from "@/components/recipe/share-button";
 import { Button } from "@/components/ui/button";
 import { Clock, Users } from "lucide-react";
@@ -63,6 +64,8 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
           </h1>
 
           <p className="text-lg leading-relaxed text-[color:var(--ink-muted)]">{recipe.description}</p>
+
+          {recipe.status === "PUBLISHED" ? <RecipeRawNotesDrop rawText={recipe.rawInputText} /> : null}
 
           <div className="flex flex-wrap items-center gap-4 text-sm text-[color:var(--ink-muted)]">
             <span className="inline-flex items-center gap-2">
