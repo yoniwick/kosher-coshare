@@ -1,6 +1,5 @@
 "use client";
 
-import { useDebouncedCallback } from "use-debounce";
 import { useEffect, useMemo, useRef, useState, useTransition, type PointerEvent as ReactPointerEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -121,40 +120,42 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     [tagText]
   );
 
-  const debouncedSave = useDebouncedCallback(async () => {
-    if (!props.signedIn) return;
+  const autosaveSnapshotRef = useRef({
+    recipeId: null as string | null,
+    rawInputText: "",
+    kosherCategory: "PAREVE" as Kosher,
+    specialBadges: [] as Badge[],
+    tags: [] as string[],
+    title: "",
+    description: "",
+    ingredients: [{ item: "", amount: "", notes: "" }] as IngredientRow[],
+    steps: [{ stepNumber: 1, instruction: "" }] as StepRow[],
+    prepMinutes: "" as number | "",
+    cookMinutes: "" as number | "",
+    totalMinutes: "" as number | "",
+    servings: "",
+    notes: "",
+  });
 
-    let id = recipeId;
-    if (!id) {
-      const created = await createDraftAction();
-      id = created.recipeId;
-      setRecipeId(id);
-    }
-
-    await updateDraftAction({
-      recipeId: id,
+  useEffect(() => {
+    autosaveSnapshotRef.current = {
+      recipeId,
       rawInputText,
       kosherCategory,
       specialBadges,
       tags,
       title,
       description,
-      ingredientsNormalized: ingredients,
-      stepsNormalized: steps,
-      prepMinutes: prepMinutes === "" ? null : prepMinutes,
-      cookMinutes: cookMinutes === "" ? null : cookMinutes,
-      totalMinutes: totalMinutes === "" ? null : totalMinutes,
-      servings: servings || null,
-      notes: notes || null,
-      status: "DRAFT",
-    });
-  }, 850);
-
-  useEffect(() => {
-    debouncedSave();
+      ingredients,
+      steps,
+      prepMinutes,
+      cookMinutes,
+      totalMinutes,
+      servings,
+      notes,
+    };
   }, [
     recipeId,
-    props.signedIn,
     rawInputText,
     kosherCategory,
     specialBadges,
@@ -168,8 +169,43 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     totalMinutes,
     servings,
     notes,
-    debouncedSave,
   ]);
+
+  useEffect(() => {
+    if (!props.signedIn) return;
+
+    async function autosaveTick() {
+      const s = autosaveSnapshotRef.current;
+      let id = s.recipeId;
+      if (!id) {
+        const created = await createDraftAction();
+        id = created.recipeId;
+        setRecipeId(id);
+      }
+
+      await updateDraftAction({
+        recipeId: id,
+        rawInputText: s.rawInputText,
+        kosherCategory: s.kosherCategory,
+        specialBadges: s.specialBadges,
+        tags: s.tags,
+        title: s.title,
+        description: s.description,
+        ingredientsNormalized: s.ingredients,
+        stepsNormalized: s.steps,
+        prepMinutes: s.prepMinutes === "" ? null : s.prepMinutes,
+        cookMinutes: s.cookMinutes === "" ? null : s.cookMinutes,
+        totalMinutes: s.totalMinutes === "" ? null : s.totalMinutes,
+        servings: s.servings || null,
+        notes: s.notes || null,
+        status: "DRAFT",
+      });
+    }
+
+    const intervalMs = 20_000;
+    const id = window.setInterval(autosaveTick, intervalMs);
+    return () => window.clearInterval(id);
+  }, [props.signedIn]);
 
   async function ensureDraft() {
     if (recipeId) return recipeId;
@@ -393,9 +429,9 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
         <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--ink-muted)]">
           Compose
         </p>
-        <h1 className="font-serif text-4xl leading-tight text-[color:var(--ink)]">A quiet space to write</h1>
+        <h1 className="font-serif text-4xl leading-tight text-[color:var(--ink)]">Share your kosher creation easy.</h1>
         <p className="text-sm text-[color:var(--ink-muted)]">
-          Draft autosaves. Add photos, jot freely, then organize with AI before publishing.
+          Add photos, jot freely, then organize with AI before publishing
         </p>
       </header>
 
