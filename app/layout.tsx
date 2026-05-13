@@ -21,10 +21,14 @@ const serif = Noto_Serif_JP({
 
 export const viewport: Viewport = {
   themeColor: "#b8583e",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(publicAppUrl()),
+  applicationName: "Kosher CoShare",
   title: {
     default: "KOSHER-COSHARE · Kosher recipes",
     template: "%s · KOSHER-COSHARE",
@@ -42,7 +46,10 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "KOSHER-COSHARE",
+    title: "Kosher CoShare",
+  },
+  formatDetection: {
+    telephone: false,
   },
 };
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChefHat, Compass, Home, Library, PlusCircle, UserRound } from "lucide-react";
 import { SiteLogo } from "@/components/brand/site-logo";
+import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -52,6 +53,8 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
         </header>
         <main>{children}</main>
       </div>
+
+      <InstallAppPrompt />
 
       <nav
         aria-label="Primary"

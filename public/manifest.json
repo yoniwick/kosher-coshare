@@ -1,12 +1,17 @@
 {
-  "name": "KOSHER-COSHARE — Kosher recipes",
-  "short_name": "KOSHER-COSHARE",
-  "description": "Post fast, discover faster — a kosher recipe community.",
+  "id": "/",
+  "name": "Kosher CoShare — kosher recipes",
+  "short_name": "CoShare",
+  "description": "Discover, share, and organize kosher creations — post quickly, discover beautifully.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "browser"],
   "background_color": "#f9f7f2",
   "theme_color": "#b8583e",
+  "categories": ["food", "lifestyle"],
   "icons": [
     {
       "src": "/brand/icon-192.png",
