@@ -1,0 +1,10 @@
+{
+  "name": "CoShare — Kosher recipes",
+  "short_name": "CoShare",
+  "description": "Post fast, discover faster — a kosher recipe community.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f1e7",
+  "theme_color": "#f6f1e7"
+}
