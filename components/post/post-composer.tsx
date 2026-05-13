@@ -1,14 +1,17 @@
 "use client";
 
 import { useDebouncedCallback } from "use-debounce";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type PointerEvent as ReactPointerEvent } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import imageCompression from "browser-image-compression";
 import {
   createDraftAction,
+  deleteRecipeImageAction,
   generateAiAction,
   publishRecipeAction,
+  reorderImagesAction,
   updateDraftAction,
   uploadRecipeImageAction,
 } from "@/actions/recipes";
@@ -17,15 +20,22 @@ import type { IngredientRow, StepRow } from "@/lib/db/schema/recipes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, UploadCloud } from "lucide-react";
+import { Sparkles, UploadCloud, ChevronUp, ChevronDown, GripVertical, Trash2 } from "lucide-react";
+import { blobImageDisplayUrl } from "@/lib/blob/display-url";
+import { cn } from "@/lib/utils";
 
 type InitialData = NonNullable<Awaited<ReturnType<typeof getEditableRecipe>>>;
+type ComposerImage = { id: string; imageUrl: string };
 
 type Kosher = "MEAT" | "DAIRY" | "PAREVE";
 type Badge = "NUT_FREE" | "PESACH" | "GLUTEN_FREE";
 
 export function PostComposer(props: { initial: InitialData | null; signedIn: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const [reorderPending, startReorderTransition] = useTransition();
 
   const [recipeId, setRecipeId] = useState<string | null>(props.initial?.recipe.id ?? null);
 
@@ -53,11 +63,25 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   const [servings, setServings] = useState(props.initial?.recipe.servings ?? "");
   const [notes, setNotes] = useState(props.initial?.recipe.notes ?? "");
 
-  const images = props.initial?.images ?? [];
+  const [imageRows, setImageRows] = useState<ComposerImage[]>(() =>
+    (props.initial?.images ?? []).map((img) => ({ id: img.id, imageUrl: img.imageUrl }))
+  );
+
+  const imageRowsRef = useRef(imageRows);
+  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
+  const pointerSessionRef = useRef<{ pointerId: number; from: number } | null>(null);
+  const hoverIndexRef = useRef<number | null>(null);
+  const [dragActiveIndex, setDragActiveIndex] = useState<number | null>(null);
+  const [dropHighlightIndex, setDropHighlightIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    imageRowsRef.current = imageRows;
+  }, [imageRows]);
 
   useEffect(() => {
     if (!props.initial) return;
     setRecipeId(props.initial.recipe.id);
+    setImageRows((props.initial.images ?? []).map((img) => ({ id: img.id, imageUrl: img.imageUrl })));
     setRawInputText(props.initial.recipe.rawInputText ?? "");
     setKosherCategory(props.initial.recipe.kosherCategory);
     setSpecialBadges(props.initial.specialBadges);
@@ -80,6 +104,13 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     setServings(props.initial.recipe.servings ?? "");
     setNotes(props.initial.recipe.notes ?? "");
   }, [props.initial]);
+
+  const recipeIdInUrl = searchParams.get("recipeId");
+  useEffect(() => {
+    if (!recipeId) return;
+    if (recipeIdInUrl === recipeId) return;
+    router.replace(`${pathname}?recipeId=${encodeURIComponent(recipeId)}`, { scroll: false });
+  }, [recipeId, recipeIdInUrl, pathname, router]);
 
   const tags = useMemo(
     () =>
@@ -145,6 +176,122 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     const res = await createDraftAction();
     setRecipeId(res.recipeId);
     return res.recipeId;
+  }
+
+  function persistImageOrder(next: ComposerImage[]) {
+    const id = recipeId;
+    if (!id || next.length === 0) return;
+    setImageRows(next);
+    startReorderTransition(async () => {
+      const res = await reorderImagesAction(
+        id,
+        next.map((r) => r.id)
+      );
+      if (!res.success) {
+        toast.error("Could not save photo order.");
+        router.refresh();
+      }
+    });
+  }
+
+  function moveImage(index: number, delta: -1 | 1) {
+    const j = index + delta;
+    if (j < 0 || j >= imageRows.length) return;
+    const next = [...imageRows];
+    [next[index], next[j]] = [next[j]!, next[index]!];
+    persistImageOrder(next);
+  }
+
+  function rowIndexFromClientY(clientY: number): number | null {
+    const rows = rowRefs.current;
+    if (!rows.length) return null;
+    let best = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < rows.length; i++) {
+      const el = rows[i];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      const mid = (r.top + r.bottom) / 2;
+      const d = Math.abs(clientY - mid);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  function onGripPointerDown(e: ReactPointerEvent<HTMLButtonElement>, index: number) {
+    if (reorderPending || e.button !== 0) return;
+    e.preventDefault();
+    pointerSessionRef.current = { pointerId: e.pointerId, from: index };
+    hoverIndexRef.current = index;
+    setDragActiveIndex(index);
+    setDropHighlightIndex(index);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onGripPointerMove(e: ReactPointerEvent<HTMLButtonElement>) {
+    const session = pointerSessionRef.current;
+    if (!session || session.pointerId !== e.pointerId) return;
+    const h = rowIndexFromClientY(e.clientY);
+    if (h == null) return;
+    if (h !== hoverIndexRef.current) {
+      hoverIndexRef.current = h;
+      setDropHighlightIndex(h);
+    }
+  }
+
+  function commitPointerReorder(e: ReactPointerEvent<HTMLButtonElement>) {
+    const session = pointerSessionRef.current;
+    if (!session || session.pointerId !== e.pointerId) return;
+    const from = session.from;
+    const to = hoverIndexRef.current ?? from;
+    pointerSessionRef.current = null;
+    hoverIndexRef.current = null;
+    setDragActiveIndex(null);
+    setDropHighlightIndex(null);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    if (to === from) return;
+    const rows = imageRowsRef.current;
+    if (from < 0 || to < 0 || from >= rows.length || to >= rows.length) return;
+    const next = [...rows];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    persistImageOrder(next);
+  }
+
+  function cancelPointerReorder(e: ReactPointerEvent<HTMLButtonElement>) {
+    const session = pointerSessionRef.current;
+    if (!session || session.pointerId !== e.pointerId) return;
+    pointerSessionRef.current = null;
+    hoverIndexRef.current = null;
+    setDragActiveIndex(null);
+    setDropHighlightIndex(null);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* no-op */
+    }
+  }
+
+  function removeImage(imageId: string) {
+    const id = recipeId;
+    if (!id) return;
+    startReorderTransition(async () => {
+      const res = await deleteRecipeImageAction(id, imageId);
+      if (!res.success) {
+        toast.error("Could not remove photo.");
+        router.refresh();
+        return;
+      }
+      setImageRows((prev) => prev.filter((r) => r.id !== imageId));
+      toast.success("Photo removed");
+    });
   }
 
   function toggleBadge(b: Badge) {
@@ -216,9 +363,12 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
         toast.error(up.error ?? "Upload failed");
         continue;
       }
+      if ("image" in up && up.image) {
+        setImageRows((prev) => [...prev, { id: up.image.id, imageUrl: up.image.imageUrl }]);
+      }
       toast.success("Photo uploaded");
-      window.location.reload();
     }
+    router.replace(`${pathname}?recipeId=${encodeURIComponent(id)}`, { scroll: false });
   }
 
   if (!props.signedIn) {
@@ -249,24 +399,19 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
         </p>
       </header>
 
-      <section className="space-y-4 rounded-3xl border border-[color:var(--line)] bg-white/70 p-6 shadow-soft">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-4 shadow-soft sm:space-y-4 sm:rounded-3xl sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="font-serif text-2xl">1 · Gather</h2>
-            <p className="text-sm text-[color:var(--ink-muted)]">Photos, voice-of-heart notes, and kosher context</p>
+            <h2 className="font-serif text-xl sm:text-2xl">1 · Gather</h2>
+            <p className="text-xs text-[color:var(--ink-muted)] sm:text-sm">Photos, notes, and kosher context</p>
           </div>
-          {!recipeId ? (
-            <Button type="button" variant="vermilion" className="rounded-2xl" onClick={() => ensureDraft()}>
-              Start draft
-            </Button>
-          ) : null}
         </div>
 
-        <label className="block space-y-2">
+        <div className="space-y-2">
           <span className="text-sm font-medium">Photos</span>
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-3xl border border-dashed border-[color:var(--line)] bg-[color:var(--paper)] px-4 py-10 text-sm text-[color:var(--ink-muted)]">
-            <UploadCloud className="h-5 w-5" />
-            Tap to upload (JPEG/PNG/WebP)
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-[color:var(--line)] bg-[color:var(--paper)] px-3 py-7 text-xs text-[color:var(--ink-muted)] sm:rounded-3xl sm:px-4 sm:py-10 sm:text-sm">
+            <UploadCloud className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" aria-hidden />
+            <span>Add photos</span>
             <input
               type="file"
               accept="image/*"
@@ -275,15 +420,85 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
               onChange={(e) => onFiles(e.target.files)}
             />
           </label>
-        </label>
+        </div>
 
-        {images.length ? (
-          <div className="grid grid-cols-3 gap-2">
-            {images.map((img) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={img.id} src={img.imageUrl} alt="" className="aspect-square rounded-2xl object-cover" />
+        {imageRows.length ? (
+          <ul className="space-y-1.5 sm:space-y-2" aria-label="Recipe photos">
+            {imageRows.map((img, index) => (
+              <li
+                key={img.id}
+                ref={(el) => {
+                  rowRefs.current[index] = el;
+                }}
+                className={cn(
+                  "flex items-center gap-2 rounded-xl border border-[color:var(--line)] bg-[color:var(--paper)] p-1.5 shadow-sm transition sm:gap-3 sm:rounded-2xl sm:p-2",
+                  dragActiveIndex !== null &&
+                    index === dropHighlightIndex &&
+                    index !== dragActiveIndex &&
+                    "ring-2 ring-[color:var(--vermilion)]/40",
+                  dragActiveIndex !== null && index === dragActiveIndex && "opacity-90 shadow-md",
+                  reorderPending && "pointer-events-none opacity-60"
+                )}
+              >
+                <button
+                  type="button"
+                  className="flex size-11 shrink-0 touch-none touch-manipulation select-none items-center justify-center rounded-lg border border-[color:var(--line)] bg-white/90 text-[color:var(--ink-muted)] active:bg-[color:var(--paper-2)] sm:size-10"
+                  aria-label="Reorder photo"
+                  disabled={reorderPending}
+                  onPointerDown={(e) => onGripPointerDown(e, index)}
+                  onPointerMove={onGripPointerMove}
+                  onPointerUp={commitPointerReorder}
+                  onPointerCancel={cancelPointerReorder}
+                >
+                  <GripVertical className="h-5 w-5 sm:h-5 sm:w-5" aria-hidden />
+                </button>
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-[color:var(--paper-2)] sm:h-24 sm:w-24 sm:rounded-xl">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={blobImageDisplayUrl(img.imageUrl)}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    draggable={false}
+                  />
+                </div>
+                <div className="flex min-w-0 flex-1 items-center justify-end gap-1 sm:gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 rounded-lg sm:h-8 sm:w-8"
+                    disabled={index === 0 || reorderPending}
+                    aria-label="Move earlier"
+                    onClick={() => moveImage(index, -1)}
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 rounded-lg sm:h-8 sm:w-8"
+                    disabled={index >= imageRows.length - 1 || reorderPending}
+                    aria-label="Move later"
+                    onClick={() => moveImage(index, 1)}
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 rounded-lg text-[color:var(--vermilion)] hover:bg-[color:var(--vermilion-soft)] sm:h-8 sm:w-8"
+                    disabled={reorderPending}
+                    aria-label="Remove photo"
+                    onClick={() => removeImage(img.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
             ))}
-          </div>
+          </ul>
         ) : null}
 
         <label className="block space-y-2">
@@ -328,11 +543,6 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
           </div>
         </div>
 
-        <label className="block space-y-2">
-          <span className="text-sm font-medium">Tags (comma separated)</span>
-          <Input value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder="shabbat, soup, ginger" />
-        </label>
-
         <div className="flex flex-wrap gap-3">
           <Button
             type="button"
@@ -364,6 +574,15 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
         <label className="block space-y-2">
           <span className="text-sm font-medium">Description</span>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+        </label>
+
+        <label className="block space-y-2">
+          <span className="text-sm font-medium">Tags</span>
+          <Input
+            value={tagText}
+            onChange={(e) => setTagText(e.target.value)}
+            placeholder="Comma-separated — Organize with AI suggests tags from your notes"
+          />
         </label>
 
         <div className="space-y-3">

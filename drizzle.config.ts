@@ -1,5 +1,9 @@
+import { config } from "dotenv";
 import { defineConfig } from "drizzle-kit";
-import "dotenv/config";
+
+// Next.js reads `.env.local`; drizzle-kit only loads `.env` by default — load both so `npm run db:push` works.
+config({ path: ".env" });
+config({ path: ".env.local", override: true });
 
 export default defineConfig({
   schema: "./lib/db/schema/index.ts",

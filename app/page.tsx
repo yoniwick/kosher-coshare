@@ -22,8 +22,7 @@ export default async function HomePage() {
             <span className="block text-[color:var(--vermilion)]">Share calmly.</span>
           </h1>
           <p className="max-w-xl text-base leading-relaxed text-[color:var(--ink-muted)]">
-            Post recipes in seconds, let AI tidy the structure, and explore a warm library of kosher
-            food — built for phones first.
+            Discover, share, and organize kosher creations, all in one place.
           </p>
         </div>
 

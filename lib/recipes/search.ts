@@ -56,7 +56,11 @@ export async function searchRecipes(
   raw: z.infer<typeof searchParamsSchema>
 ): Promise<{ items: RecipeSearchRow[]; nextCursor: string | null }> {
   const database = db();
-  const limit = raw.limit;
+  const limitRaw = raw.limit;
+  const limit =
+    typeof limitRaw === "number" && Number.isFinite(limitRaw)
+      ? Math.min(48, Math.max(1, Math.floor(limitRaw)))
+      : 24;
   const offset = Number.parseInt(raw.cursor ?? "0", 10) || 0;
 
   const tok = tokenize(raw.q);
@@ -103,7 +107,10 @@ export async function searchRecipes(
   if (raw.badges?.length) {
     for (const b of raw.badges) {
       conditions.push(
-        sql`exists (select 1 from ${recipeSpecialBadges} rsb where rsb.recipe_id = ${recipes.id} and rsb.badge = ${b})`
+        sql`exists (
+          select 1 from recipe_special_badge rsb
+          where rsb.recipe_id = ${recipes.id} and rsb.badge = ${b}
+        )`
       );
     }
   }
@@ -117,19 +124,37 @@ export async function searchRecipes(
         ? [desc(recipes.commentCount), desc(recipes.publishedAt)]
         : [desc(recipes.publishedAt), desc(recipes.id)];
 
-  const rows = await database
-    .select({
-      recipe: recipes,
-      authorName: users.name,
-      authorImage: users.image,
-      authorUsername: users.username,
-    })
-    .from(recipes)
-    .innerJoin(users, eq(recipes.authorId, users.id))
-    .where(whereClause)
-    .orderBy(...orderBy)
-    .limit(limit + 1)
-    .offset(offset);
+  let rows: Array<{
+    recipe: typeof recipes.$inferSelect;
+    authorName: string | null;
+    authorImage: string | null;
+    authorUsername: string | null;
+  }>;
+
+  try {
+    rows = await database
+      .select({
+        recipe: recipes,
+        authorName: users.name,
+        authorImage: users.image,
+        authorUsername: users.username,
+      })
+      .from(recipes)
+      .innerJoin(users, eq(recipes.authorId, users.id))
+      .where(whereClause)
+      .orderBy(...orderBy)
+      .limit(limit + 1)
+      .offset(offset);
+  } catch (err) {
+    const detail =
+      err instanceof Error ? `${err.message}${err.cause instanceof Error ? ` — ${err.cause.message}` : ""}` : String(err);
+    const hint =
+      /does not exist|relation|Failed query/i.test(detail) &&
+      (/recipe|user|tag|enum/i.test(detail) || /relation/i.test(detail))
+        ? " Apply the Drizzle schema to your Neon database: from the project folder run npm run db:push (after DATABASE_URL is set in .env.local)."
+        : "";
+    throw new Error(`Recipe search failed: ${detail}${hint}`, { cause: err });
+  }
 
   const slice = rows.slice(0, limit);
   const hasMore = rows.length > limit;

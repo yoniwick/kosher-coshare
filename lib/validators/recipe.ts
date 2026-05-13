@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeProfileUsername } from "@/lib/profile/username";
 import { mealTypeSchema, difficultySchema } from "@/lib/validators/ai";
 
 export const kosherCategorySchema = z.enum(["MEAT", "DAIRY", "PAREVE"]);
@@ -72,13 +73,23 @@ export const publishRecipeSchema = z.object({
 });
 
 export const profileUpdateSchema = z.object({
-  username: z
-    .string()
-    .min(3)
-    .max(32)
-    .regex(/^[a-z0-9_]+$/, "Use lowercase letters, numbers, underscore")
-    .optional()
-    .or(z.literal("")),
+  username: z.preprocess(
+    (val) => {
+      if (val === undefined || val === null) return undefined;
+      if (typeof val !== "string") return val;
+      return normalizeProfileUsername(val);
+    },
+    z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .min(3, "Username must be at least 3 characters")
+          .max(32)
+          .regex(/^[a-z0-9_-]+$/, "Use lowercase letters, numbers, underscores, and hyphens"),
+      ])
+      .optional()
+  ),
   bio: z.string().max(500).optional(),
 });
 

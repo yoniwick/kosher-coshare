@@ -3,10 +3,12 @@ import type { RecipeSearchRow } from "@/lib/recipes/search";
 import { cn } from "@/lib/utils";
 import { KosherCategoryBadge, SpecialBadgeList } from "@/components/recipe/kosher-badges";
 import { Clock, MessageCircle, Heart } from "lucide-react";
+import { blobImageDisplayUrl } from "@/lib/blob/display-url";
 
 export function RecipeCard({ recipe }: { recipe: RecipeSearchRow }) {
   const href = `/recipe/${recipe.slug}`;
   const img = recipe.coverImageUrl;
+  const coverSrc = img ? blobImageDisplayUrl(img) : "";
 
   return (
     <Link href={href} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--vermilion)] rounded-3xl">
@@ -15,7 +17,7 @@ export function RecipeCard({ recipe }: { recipe: RecipeSearchRow }) {
           {img ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={img}
+              src={coverSrc}
               alt=""
               className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
               loading="lazy"

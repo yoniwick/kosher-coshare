@@ -19,11 +19,9 @@ export function buildUserPrompt(input: {
   rawText: string;
   kosherCategory: string;
   specialBadges: string[];
-  tags: string[];
 }) {
   return `Author kosher category (metadata): ${input.kosherCategory}
 Optional author badges (metadata): ${input.specialBadges.join(", ") || "none"}
-Author suggested tags (may refine): ${input.tags.join(", ") || "none"}
 
 Raw recipe notes:
 """
@@ -31,7 +29,13 @@ ${input.rawText}
 """
 
 Return JSON with keys:
-title, description, ingredients[{item, amount, notes?}], steps[{stepNumber, instruction}],
-prepMinutes, cookMinutes, totalMinutes, servings, notes[string[]], tags[string[]],
-optional difficulty (EASY|MEDIUM|HARD|null), optional mealType (APPETIZER|MAIN|SIDE|SOUP|SALAD|DESSERT|DRINK|SNACK|OTHER|null).`;
+title (string), description (string),
+ingredients (array of {item, amount, optional notes}),
+steps (array of {stepNumber: positive integer, instruction}),
+prepMinutes, cookMinutes, totalMinutes (each integer or null — not strings),
+servings (string or null),
+notes (array of strings; use [] if none),
+tags (array of short lowercase search strings; use [] if none),
+optional difficulty (EASY|MEDIUM|HARD|null),
+optional mealType (APPETIZER|MAIN|SIDE|SOUP|SALAD|DESSERT|DRINK|SNACK|OTHER|null).`;
 }

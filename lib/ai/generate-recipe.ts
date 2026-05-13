@@ -5,7 +5,6 @@ type GenerateArgs = {
   rawText: string;
   kosherCategory: "MEAT" | "DAIRY" | "PAREVE";
   specialBadges: Array<"NUT_FREE" | "PESACH" | "GLUTEN_FREE">;
-  tags: string[];
 };
 
 export async function generateRecipeStructure(args: GenerateArgs): Promise<AiRecipeOutput> {
@@ -56,12 +55,26 @@ export async function generateRecipeStructure(args: GenerateArgs): Promise<AiRec
   try {
     parsed = JSON.parse(content);
   } catch {
-    throw new Error("Model returned non-JSON output");
+    const t = content.trim();
+    const start = t.indexOf("{");
+    const end = t.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        parsed = JSON.parse(t.slice(start, end + 1));
+      } catch {
+        throw new Error("Model returned non-JSON output");
+      }
+    } else {
+      throw new Error("Model returned non-JSON output");
+    }
   }
 
   const validated = aiRecipeOutputSchema.safeParse(parsed);
   if (!validated.success) {
-    throw new Error("Model JSON failed validation. Try again or edit manually.");
+    const msg = validated.error.issues.map((i) => i.message).join("; ");
+    throw new Error(
+      msg ? `Model JSON failed validation: ${msg}` : "Model JSON failed validation. Try again or edit manually."
+    );
   }
 
   return validated.data;

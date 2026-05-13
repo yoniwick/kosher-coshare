@@ -9,6 +9,7 @@ import { CommentsPanel } from "@/components/recipe/comments-panel";
 import { ShareRecipeButton } from "@/components/recipe/share-button";
 import { Button } from "@/components/ui/button";
 import { Clock, Users } from "lucide-react";
+import { blobImageDisplayUrl } from "@/lib/blob/display-url";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
           {recipe.coverImageUrl || images[0]?.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={recipe.coverImageUrl ?? images[0]?.imageUrl ?? ""}
+              src={blobImageDisplayUrl(recipe.coverImageUrl ?? images[0]?.imageUrl ?? "")}
               alt=""
               className="aspect-[16/10] w-full object-cover"
             />
@@ -115,7 +116,7 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={img.id}
-                src={img.imageUrl}
+                src={blobImageDisplayUrl(img.imageUrl)}
                 alt={img.altText ?? ""}
                 className="aspect-square rounded-3xl object-cover"
               />

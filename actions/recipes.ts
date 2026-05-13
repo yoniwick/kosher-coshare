@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { recipeImages, recipes, recipeSpecialBadges, recipeTags, tags } from "@/lib/db/schema/recipes";
+import { recipeImages, recipes, recipeSpecialBadges } from "@/lib/db/schema/recipes";
 import { generateRecipeStructure } from "@/lib/ai/generate-recipe";
 import { makeRecipeSlug } from "@/lib/recipes/slug";
 import { replaceRecipeTags } from "@/lib/recipes/tag-sync";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/validators/recipe";
 import type { z } from "zod";
 import { put } from "@vercel/blob";
+import { getBlobPutAccess } from "@/lib/blob/access";
 
 async function requireSession() {
   const session = await auth();
@@ -175,20 +176,11 @@ export async function generateAiAction(recipeId: string) {
     .from(recipeSpecialBadges)
     .where(eq(recipeSpecialBadges.recipeId, recipeId));
 
-  const tagNameRows = await database
-    .select({ name: tags.name })
-    .from(recipeTags)
-    .innerJoin(tags, eq(recipeTags.tagId, tags.id))
-    .where(eq(recipeTags.recipeId, recipeId));
-
-  const tagNames = tagNameRows.map((t) => t.name);
-
   try {
     const ai = await generateRecipeStructure({
       rawText: row.rawInputText || row.description || "",
       kosherCategory: row.kosherCategory,
       specialBadges: badgesRows.map((b) => b.badge),
-      tags: tagNames,
     });
 
     await database
@@ -210,7 +202,7 @@ export async function generateAiAction(recipeId: string) {
       })
       .where(eq(recipes.id, recipeId));
 
-    await replaceRecipeTags(recipeId, [...tagNames, ...ai.tags]);
+    await replaceRecipeTags(recipeId, ai.tags);
 
     revalidatePath("/post");
     revalidatePath(`/recipe/${row.slug}`);
@@ -293,6 +285,11 @@ export async function deleteRecipeAction(recipeId: string) {
 
   revalidatePath("/");
   revalidatePath("/profile");
+  revalidatePath("/my-recipes");
+  revalidatePath("/post");
+  if (row.slug) {
+    revalidatePath(`/recipe/${row.slug}`);
+  }
   return { success: true as const };
 }
 
@@ -324,9 +321,14 @@ export async function uploadRecipeImageAction(formData: FormData) {
     return { success: false as const, error: "Image must be 6MB or smaller." };
   }
 
-  const blob = await put(file.name, file, {
-    access: "public",
+  const rawName = file.name.replace(/[/\\]/g, "_").trim() || "image";
+  const safeName = rawName.slice(0, 180);
+  const pathname = `recipes/${recipeId}/${safeName}`;
+
+  const blob = await put(pathname, file, {
+    access: getBlobPutAccess(),
     token: process.env.BLOB_READ_WRITE_TOKEN,
+    addRandomSuffix: true,
   });
 
   const [{ max }] = await database
@@ -364,11 +366,21 @@ export async function reorderImagesAction(recipeId: string, orderedIds: string[]
   const userId = await requireSession();
   const database = db();
   const [recipe] = await database
-    .select({ authorId: recipes.authorId })
+    .select({ authorId: recipes.authorId, slug: recipes.slug })
     .from(recipes)
     .where(eq(recipes.id, recipeId));
 
   if (!recipe || recipe.authorId !== userId) throw new Error("Forbidden");
+
+  const rows = await database
+    .select({ id: recipeImages.id })
+    .from(recipeImages)
+    .where(eq(recipeImages.recipeId, recipeId));
+
+  const valid = new Set(rows.map((r) => r.id));
+  if (orderedIds.length !== valid.size || !orderedIds.every((id) => valid.has(id))) {
+    return { success: false as const, error: "Invalid photo order" as const };
+  }
 
   let order = 0;
   for (const id of orderedIds) {
@@ -378,7 +390,77 @@ export async function reorderImagesAction(recipeId: string, orderedIds: string[]
       .where(and(eq(recipeImages.id, id), eq(recipeImages.recipeId, recipeId)));
   }
 
+  const firstId = orderedIds[0]!;
+  const [firstRow] = await database
+    .select({ imageUrl: recipeImages.imageUrl })
+    .from(recipeImages)
+    .where(and(eq(recipeImages.id, firstId), eq(recipeImages.recipeId, recipeId)))
+    .limit(1);
+
+  await database
+    .update(recipes)
+    .set({
+      coverImageUrl: firstRow?.imageUrl ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(recipes.id, recipeId));
+
   revalidatePath("/post");
+  if (recipe.slug) {
+    revalidatePath(`/recipe/${recipe.slug}`);
+  }
+
+  return { success: true as const };
+}
+
+export async function deleteRecipeImageAction(recipeId: string, imageId: string) {
+  const userId = await requireSession();
+  const database = db();
+  const [recipe] = await database
+    .select({ authorId: recipes.authorId, slug: recipes.slug })
+    .from(recipes)
+    .where(eq(recipes.id, recipeId))
+    .limit(1);
+
+  if (!recipe || recipe.authorId !== userId) throw new Error("Forbidden");
+
+  const [row] = await database
+    .select({ id: recipeImages.id })
+    .from(recipeImages)
+    .where(and(eq(recipeImages.id, imageId), eq(recipeImages.recipeId, recipeId)))
+    .limit(1);
+
+  if (!row) {
+    return { success: false as const, error: "Photo not found" as const };
+  }
+
+  await database.delete(recipeImages).where(eq(recipeImages.id, imageId));
+
+  const remaining = await database
+    .select({ id: recipeImages.id, imageUrl: recipeImages.imageUrl })
+    .from(recipeImages)
+    .where(eq(recipeImages.recipeId, recipeId))
+    .orderBy(asc(recipeImages.sortOrder));
+
+  let order = 0;
+  for (const r of remaining) {
+    await database
+      .update(recipeImages)
+      .set({ sortOrder: order++ })
+      .where(eq(recipeImages.id, r.id));
+  }
+
+  const newCover = remaining[0]?.imageUrl ?? null;
+  await database
+    .update(recipes)
+    .set({ coverImageUrl: newCover, updatedAt: new Date() })
+    .where(eq(recipes.id, recipeId));
+
+  revalidatePath("/post");
+  if (recipe.slug) {
+    revalidatePath(`/recipe/${recipe.slug}`);
+  }
+
   return { success: true as const };
 }
 

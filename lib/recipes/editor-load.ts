@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   recipeImages,
@@ -7,6 +7,18 @@ import {
   recipeTags,
   tags,
 } from "@/lib/db/schema/recipes";
+
+/** Most recently touched draft for composer when `/post` has no `recipeId`. */
+export async function getLatestDraftRecipeId(authorId: string): Promise<string | null> {
+  const database = db();
+  const [row] = await database
+    .select({ id: recipes.id })
+    .from(recipes)
+    .where(and(eq(recipes.authorId, authorId), eq(recipes.status, "DRAFT")))
+    .orderBy(desc(recipes.updatedAt))
+    .limit(1);
+  return row?.id ?? null;
+}
 
 export async function getEditableRecipe(recipeId: string, userId: string) {
   const database = db();

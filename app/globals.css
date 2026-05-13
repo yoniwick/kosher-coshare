@@ -3,13 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --paper: #f6f1e7;
-  --paper-2: #efe7da;
-  --ink: #1b1a17;
+  --paper: #f9f7f2;
+  --paper-2: #f0ebe3;
+  --ink: #2d2a26;
   --ink-muted: #4a4740;
-  --vermilion: #c23c2a;
-  --vermilion-soft: #f1d7d1;
-  --sage: #8b9a7b;
+  /* Brand accent (terracotta from palette); keeps existing token name used across UI */
+  --vermilion: #b8583e;
+  --vermilion-soft: #efd9cf;
+  --sage: #7d8f72;
   --sage-soft: #e3eadc;
   --gold: #c6a667;
   --gold-soft: #f2e6c9;

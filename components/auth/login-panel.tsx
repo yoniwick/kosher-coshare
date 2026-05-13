@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import { SiteLogo } from "@/components/brand/site-logo";
 import { Button } from "@/components/ui/button";
 
 export function LoginPanel() {
@@ -10,6 +11,9 @@ export function LoginPanel() {
 
   return (
     <div className="mx-auto max-w-md space-y-8 rounded-3xl border border-[color:var(--line)] bg-white/70 p-10 text-center shadow-soft">
+      <div className="flex justify-center">
+        <SiteLogo className="justify-center" />
+      </div>
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--ink-muted)]">Welcome</p>
         <h1 className="font-serif text-4xl text-[color:var(--ink)]">Step into the kitchen</h1>
