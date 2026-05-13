@@ -1,4 +1,5 @@
 import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/ai/prompt";
+import { publicAppUrl } from "@/lib/public-app-url";
 import { aiRecipeOutputSchema, type AiRecipeOutput } from "@/lib/validators/ai";
 
 type GenerateArgs = {
@@ -14,7 +15,7 @@ export async function generateRecipeStructure(args: GenerateArgs): Promise<AiRec
   }
 
   const model = process.env.OPENROUTER_MODEL ?? "openai/gpt-4o-mini";
-  const referer = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const referer = publicAppUrl();
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",

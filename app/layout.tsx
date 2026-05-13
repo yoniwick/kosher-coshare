@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
 import { MobileShell } from "@/components/layout/mobile-shell";
 import { RegisterServiceWorker } from "@/components/pwa/register-sw";
+import { publicAppUrl } from "@/lib/public-app-url";
 
 const sans = DM_Sans({
   subsets: ["latin"],
@@ -23,7 +24,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(publicAppUrl()),
   title: {
     default: "KOSHER-COSHARE · Kosher recipes",
     template: "%s · KOSHER-COSHARE",
