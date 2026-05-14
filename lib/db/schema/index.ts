@@ -1,4 +1,5 @@
 export * from "./auth";
+export * from "./notifications";
 export * from "./recipes";
 
 import { relations } from "drizzle-orm";

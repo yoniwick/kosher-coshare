@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { DM_Sans, Noto_Serif_JP } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
-import { MobileShell } from "@/components/layout/mobile-shell";
+import { AppShell } from "@/components/layout/app-shell";
 import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 import { publicAppUrl } from "@/lib/public-app-url";
 
@@ -67,7 +67,7 @@ export default function RootLayout({
       >
         <RegisterServiceWorker />
         <AppProviders>
-          <MobileShell>{children}</MobileShell>
+          <AppShell>{children}</AppShell>
         </AppProviders>
       </body>
     </html>

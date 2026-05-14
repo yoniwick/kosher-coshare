@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { isSuperuserEmail } from "@/lib/auth/superuser";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { getEditableRecipe, getLatestDraftRecipeId } from "@/lib/recipes/editor-load";
@@ -11,7 +12,8 @@ export default async function PostPage({
 }: {
   searchParams: Promise<{ recipeId?: string }>;
 }) {
-  const userId = (await auth())?.user?.id;
+  const session = await auth();
+  const userId = session?.user?.id;
   const params = await searchParams;
 
   if (!userId) {
@@ -21,10 +23,12 @@ export default async function PostPage({
     redirect(`/login?callbackUrl=${encodeURIComponent(postTarget)}`);
   }
 
+  const moderator = isSuperuserEmail(session?.user?.email);
+
   let initial = null;
   const recipeId = params.recipeId ?? (await getLatestDraftRecipeId(userId));
   if (recipeId) {
-    initial = await getEditableRecipe(recipeId, userId);
+    initial = await getEditableRecipe(recipeId, userId, { asModerator: moderator });
   }
 
   return (

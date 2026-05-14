@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { isOwnerOrSuperuser } from "@/lib/auth/superuser";
+import { requireSignedInUser } from "@/lib/auth/require-user";
 import { recipeImages, recipes, recipeSpecialBadges } from "@/lib/db/schema/recipes";
 import { generateRecipeStructure } from "@/lib/ai/generate-recipe";
 import { makeRecipeSlug } from "@/lib/recipes/slug";
@@ -17,14 +18,6 @@ import {
 import type { z } from "zod";
 import { put } from "@vercel/blob";
 import { getBlobPutAccess } from "@/lib/blob/access";
-
-async function requireSession() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-  return session.user.id;
-}
 
 async function replaceSpecialBadges(
   recipeId: string,
@@ -44,7 +37,7 @@ async function replaceSpecialBadges(
 }
 
 export async function createDraftAction() {
-  const userId = await requireSession();
+  const { userId } = await requireSignedInUser();
   const database = db();
   const slug = makeRecipeSlug("new-recipe");
 
@@ -70,7 +63,7 @@ export async function createDraftAction() {
 }
 
 export async function updateDraftAction(input: z.infer<typeof recipeDraftInputSchema>) {
-  const userId = await requireSession();
+  const { userId, email } = await requireSignedInUser();
   const parsed = recipeDraftInputSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false as const, error: parsed.error.flatten().fieldErrors };
@@ -121,7 +114,7 @@ export async function updateDraftAction(input: z.infer<typeof recipeDraftInputSc
     .where(eq(recipes.id, recipeId))
     .limit(1);
 
-  if (!existing || existing.authorId !== userId) {
+  if (!existing || !isOwnerOrSuperuser(existing.authorId, userId, email)) {
     throw new Error("Forbidden");
   }
 
@@ -157,7 +150,7 @@ export async function updateDraftAction(input: z.infer<typeof recipeDraftInputSc
 }
 
 export async function generateAiAction(recipeId: string) {
-  const userId = await requireSession();
+  const { userId, email } = await requireSignedInUser();
   if (!rateLimitSync(`ai:${userId}`, 8, 60_000)) {
     return { success: false as const, error: "Too many AI requests. Try again shortly." };
   }
@@ -169,7 +162,7 @@ export async function generateAiAction(recipeId: string) {
     .where(eq(recipes.id, recipeId))
     .limit(1);
 
-  if (!row || row.authorId !== userId) {
+  if (!row || !isOwnerOrSuperuser(row.authorId, userId, email)) {
     throw new Error("Forbidden");
   }
 
@@ -216,7 +209,7 @@ export async function generateAiAction(recipeId: string) {
 }
 
 export async function publishRecipeAction(input: z.infer<typeof publishRecipeSchema>) {
-  const userId = await requireSession();
+  const { userId, email } = await requireSignedInUser();
   const parsed = publishRecipeSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false as const, error: parsed.error.flatten().fieldErrors };
@@ -230,7 +223,7 @@ export async function publishRecipeAction(input: z.infer<typeof publishRecipeSch
     .where(eq(recipes.id, data.recipeId))
     .limit(1);
 
-  if (!row || row.authorId !== userId) {
+  if (!row || !isOwnerOrSuperuser(row.authorId, userId, email)) {
     throw new Error("Forbidden");
   }
 
@@ -274,14 +267,14 @@ export async function publishRecipeAction(input: z.infer<typeof publishRecipeSch
 }
 
 export async function deleteRecipeAction(recipeId: string) {
-  const userId = await requireSession();
+  const { userId, email } = await requireSignedInUser();
   const database = db();
   const [row] = await database
     .select({ authorId: recipes.authorId, slug: recipes.slug })
     .from(recipes)
     .where(eq(recipes.id, recipeId));
 
-  if (!row || row.authorId !== userId) throw new Error("Forbidden");
+  if (!row || !isOwnerOrSuperuser(row.authorId, userId, email)) throw new Error("Forbidden");
 
   await database.delete(recipes).where(eq(recipes.id, recipeId));
 
@@ -296,7 +289,7 @@ export async function deleteRecipeAction(recipeId: string) {
 }
 
 export async function uploadRecipeImageAction(formData: FormData) {
-  const userId = await requireSession();
+  const { userId, email } = await requireSignedInUser();
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return { success: false as const, error: "Image uploads are not configured (BLOB_READ_WRITE_TOKEN)." };
   }
@@ -315,7 +308,7 @@ export async function uploadRecipeImageAction(formData: FormData) {
     .where(eq(recipes.id, recipeId))
     .limit(1);
 
-  if (!recipe || recipe.authorId !== userId) {
+  if (!recipe || !isOwnerOrSuperuser(recipe.authorId, userId, email)) {
     throw new Error("Forbidden");
   }
 
@@ -365,14 +358,14 @@ export async function uploadRecipeImageAction(formData: FormData) {
 }
 
 export async function reorderImagesAction(recipeId: string, orderedIds: string[]) {
-  const userId = await requireSession();
+  const { userId, email } = await requireSignedInUser();
   const database = db();
   const [recipe] = await database
     .select({ authorId: recipes.authorId, slug: recipes.slug })
     .from(recipes)
     .where(eq(recipes.id, recipeId));
 
-  if (!recipe || recipe.authorId !== userId) throw new Error("Forbidden");
+  if (!recipe || !isOwnerOrSuperuser(recipe.authorId, userId, email)) throw new Error("Forbidden");
 
   const rows = await database
     .select({ id: recipeImages.id })
@@ -416,7 +409,7 @@ export async function reorderImagesAction(recipeId: string, orderedIds: string[]
 }
 
 export async function deleteRecipeImageAction(recipeId: string, imageId: string) {
-  const userId = await requireSession();
+  const { userId, email } = await requireSignedInUser();
   const database = db();
   const [recipe] = await database
     .select({ authorId: recipes.authorId, slug: recipes.slug })
@@ -424,7 +417,7 @@ export async function deleteRecipeImageAction(recipeId: string, imageId: string)
     .where(eq(recipes.id, recipeId))
     .limit(1);
 
-  if (!recipe || recipe.authorId !== userId) throw new Error("Forbidden");
+  if (!recipe || !isOwnerOrSuperuser(recipe.authorId, userId, email)) throw new Error("Forbidden");
 
   const [row] = await database
     .select({ id: recipeImages.id })
@@ -467,14 +460,14 @@ export async function deleteRecipeImageAction(recipeId: string, imageId: string)
 }
 
 export async function setCoverImageAction(recipeId: string, imageUrl: string) {
-  const userId = await requireSession();
+  const { userId, email } = await requireSignedInUser();
   const database = db();
   const [recipe] = await database
     .select({ authorId: recipes.authorId })
     .from(recipes)
     .where(eq(recipes.id, recipeId));
 
-  if (!recipe || recipe.authorId !== userId) throw new Error("Forbidden");
+  if (!recipe || !isOwnerOrSuperuser(recipe.authorId, userId, email)) throw new Error("Forbidden");
 
   await database
     .update(recipes)

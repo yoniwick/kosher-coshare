@@ -96,6 +96,7 @@ export const profileUpdateSchema = z.object({
 export const commentBodySchema = z.object({
   recipeId: z.string().uuid(),
   body: z.string().min(1).max(4000),
+  parentId: z.string().uuid().optional(),
 });
 
 export const commentEditSchema = z.object({

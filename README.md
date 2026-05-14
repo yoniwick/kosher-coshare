@@ -22,7 +22,7 @@ Production-oriented **Next.js App Router** app for a kosher **CoShare** communit
 - **`recipe`**: core recipe record with draft/published workflow, kosher category + structured JSON fields
 - **`recipe_image`**: ordered photos per recipe
 - **`vote`**: composite PK `(userId, recipeId)` (one vote per user per recipe)
-- **`comment`**: threaded body with soft-delete (`deletedAt`)
+- **`comment`**: threaded body (`parentId` self-FK, cascade on delete); rows are removed when deleted
 - **`tag` + `recipe_tag`**: normalized tags + join
 - **`recipe_special_badge`**: optional badges as relational rows (filter-friendly)
 - **`bookmark`**: saved recipes per user

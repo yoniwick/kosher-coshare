@@ -20,13 +20,21 @@ export async function getLatestDraftRecipeId(authorId: string): Promise<string |
   return row?.id ?? null;
 }
 
-export async function getEditableRecipe(recipeId: string, userId: string) {
+export async function getEditableRecipe(
+  recipeId: string,
+  userId: string,
+  options?: { asModerator?: boolean }
+) {
   const database = db();
 
   const [recipe] = await database
     .select()
     .from(recipes)
-    .where(and(eq(recipes.id, recipeId), eq(recipes.authorId, userId)))
+    .where(
+      options?.asModerator
+        ? eq(recipes.id, recipeId)
+        : and(eq(recipes.id, recipeId), eq(recipes.authorId, userId))
+    )
     .limit(1);
 
   if (!recipe) return null;

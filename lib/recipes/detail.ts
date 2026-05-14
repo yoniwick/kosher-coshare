@@ -11,6 +11,7 @@ import {
   tags,
   votes,
 } from "@/lib/db/schema/recipes";
+import { buildCommentTree } from "@/lib/recipes/comment-tree";
 
 export async function getRecipeDetail(slug: string, viewerId?: string | null) {
   const database = db();
@@ -59,9 +60,7 @@ export async function getRecipeDetail(slug: string, viewerId?: string | null) {
         ? database
             .select({ id: bookmarks.userId })
             .from(bookmarks)
-            .where(
-              and(eq(bookmarks.recipeId, row.recipe.id), eq(bookmarks.userId, viewerId))
-            )
+            .where(and(eq(bookmarks.recipeId, row.recipe.id), eq(bookmarks.userId, viewerId)))
             .limit(1)
         : Promise.resolve([]),
       database
@@ -70,7 +69,7 @@ export async function getRecipeDetail(slug: string, viewerId?: string | null) {
           body: comments.body,
           createdAt: comments.createdAt,
           authorId: comments.authorId,
-          deletedAt: comments.deletedAt,
+          parentId: comments.parentId,
           authorName: users.name,
           authorImage: users.image,
           authorUsername: users.username,
@@ -89,6 +88,6 @@ export async function getRecipeDetail(slug: string, viewerId?: string | null) {
     tags: tagRows.map((t) => t.name),
     hasVoted: viewerId ? votedRows.length > 0 : false,
     bookmarked: viewerId ? bookmarkRows.length > 0 : false,
-    comments: rawComments,
+    commentTree: buildCommentTree(rawComments),
   };
 }

@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { ChefHat, Compass, Home, Library, PlusCircle, UserRound } from "lucide-react";
 import { SiteLogo } from "@/components/brand/site-logo";
 import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
+import { NotificationBell } from "@/components/layout/notification-bell";
+import type { NotificationClientPayload } from "@/lib/notifications/client-payload";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -21,14 +23,22 @@ function navActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function MobileShell({ children }: { children: React.ReactNode }) {
+export function MobileShell(props: {
+  children: React.ReactNode;
+  signedIn: boolean;
+  notificationInitial: NotificationClientPayload | null;
+}) {
   const pathname = usePathname();
+  const { children, signedIn, notificationInitial } = props;
 
   return (
     <div className="min-h-[100dvh] pb-[calc(88px+env(safe-area-inset-bottom))] md:pb-10">
       <div className="mx-auto w-full max-w-lg px-4 pt-6 md:max-w-5xl md:px-10">
         <header className="mb-5 flex flex-col gap-4 md:mb-6 md:flex-row md:items-center md:justify-between md:gap-6">
-          <SiteLogo />
+          <div className="flex items-center justify-between gap-3 md:flex-1 md:justify-start md:gap-4">
+            <SiteLogo />
+            {signedIn && notificationInitial ? <NotificationBell initial={notificationInitial} /> : null}
+          </div>
           <nav
             aria-label="Primary"
             className="hidden rounded-2xl border border-[color:var(--line)] bg-white/70 p-1.5 shadow-sm backdrop-blur-sm md:flex md:flex-wrap md:items-center md:justify-end md:gap-0.5"

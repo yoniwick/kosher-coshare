@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
+import { blobImageDisplayUrl } from "@/lib/blob/display-url";
+import { isSuperuserEmail } from "@/lib/auth/superuser";
 import { getRecipeDetail } from "@/lib/recipes/detail";
 import { KosherCategoryBadge, SpecialBadgeList } from "@/components/recipe/kosher-badges";
 import type { RecipeSearchRow } from "@/lib/recipes/search";
@@ -10,21 +12,28 @@ import { RecipeRawNotesDrop } from "@/components/recipe/recipe-raw-notes-drop";
 import { ShareRecipeButton } from "@/components/recipe/share-button";
 import { Button } from "@/components/ui/button";
 import { Clock, Users } from "lucide-react";
-import { blobImageDisplayUrl } from "@/lib/blob/display-url";
+import type { RecipeCommentNode } from "@/lib/recipes/comment-tree";
 
-export const dynamic = "force-dynamic";
+function coerceCommentTree(nodes: RecipeCommentNode[]): RecipeCommentNode[] {
+  return nodes.map((n) => ({
+    ...n,
+    createdAt: n.createdAt instanceof Date ? n.createdAt : new Date(String(n.createdAt)),
+    replies: coerceCommentTree(n.replies),
+  }));
+}
 
 export default async function RecipePage(props: { params: Promise<{ slug: string }> }) {
   const { slug } = await props.params;
   const session = await auth();
   const viewerId = session?.user?.id ?? null;
+  const viewerIsModerator = isSuperuserEmail(session?.user?.email);
 
   const detail = await getRecipeDetail(slug, viewerId);
   if (!detail) notFound();
 
-  const { recipe, author, images, badges, tags, hasVoted, bookmarked, comments } = detail;
+  const { recipe, author, images, badges, tags, hasVoted, bookmarked, commentTree } = detail;
 
-  if (recipe.status === "DRAFT" && recipe.authorId !== viewerId) {
+  if (recipe.status === "DRAFT" && recipe.authorId !== viewerId && !viewerIsModerator) {
     notFound();
   }
 
@@ -34,6 +43,7 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
   const steps = recipe.stepsNormalized ?? [];
 
   const owner = viewerId === recipe.authorId;
+  const canEditRecipe = owner || viewerIsModerator;
 
   return (
     <article className="space-y-10 pb-16">
@@ -102,7 +112,7 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
               signedIn={Boolean(session)}
             />
             <ShareRecipeButton slug={recipe.slug} />
-            {owner ? (
+            {canEditRecipe ? (
               <Button asChild variant="subtle" className="rounded-2xl">
                 <Link href={`/post?recipeId=${recipe.id}`}>Edit</Link>
               </Button>
@@ -188,10 +198,9 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
         recipeId={recipe.id}
         slug={recipe.slug}
         signedIn={Boolean(session)}
-        comments={comments.map((c) => ({
-          ...c,
-          createdAt: c.createdAt instanceof Date ? c.createdAt : new Date(c.createdAt),
-        }))}
+        viewerId={viewerId}
+        viewerIsModerator={viewerIsModerator}
+        commentTree={coerceCommentTree(commentTree)}
       />
     </article>
   );
