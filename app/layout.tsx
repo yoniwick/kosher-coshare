@@ -35,6 +35,20 @@ export const metadata: Metadata = {
   },
   description: "A calm, fast community for kosher recipes — post quickly, discover beautifully.",
   manifest: "/manifest.json",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "Kosher CoShare",
+    title: "Kosher CoShare — kosher recipes",
+    description: "A calm, fast community for kosher recipes — post quickly, discover beautifully.",
+    images: [{ url: "/brand/logo-app-icon.png", alt: "Kosher CoShare" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Kosher CoShare — kosher recipes",
+    description: "A calm, fast community for kosher recipes — post quickly, discover beautifully.",
+    images: ["/brand/logo-app-icon.png"],
+  },
   icons: {
     icon: [
       { url: "/brand/icon-192.png", sizes: "192x192", type: "image/png" },

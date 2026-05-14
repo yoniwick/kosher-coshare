@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { blobImageDisplayUrl } from "@/lib/blob/display-url";
@@ -10,9 +11,14 @@ import { VoteBookmarkBar } from "@/components/recipe/vote-bookmark-bar";
 import { CommentsPanel } from "@/components/recipe/comments-panel";
 import { RecipeRawNotesDrop } from "@/components/recipe/recipe-raw-notes-drop";
 import { ShareRecipeButton } from "@/components/recipe/share-button";
+import { RecipeRowDeleteButton } from "@/components/recipe/recipe-row-delete-button";
 import { Button } from "@/components/ui/button";
 import { Clock, Users } from "lucide-react";
 import type { RecipeCommentNode } from "@/lib/recipes/comment-tree";
+import { DEFAULT_SOCIAL_IMAGE_PATH, socialShareImageHref } from "@/lib/seo/social-share";
+
+/** Per-user actions (Edit / Remove) depend on `auth()` — must not be statically shared. */
+export const dynamic = "force-dynamic";
 
 function coerceCommentTree(nodes: RecipeCommentNode[]): RecipeCommentNode[] {
   return nodes.map((n) => ({
@@ -20,6 +26,50 @@ function coerceCommentTree(nodes: RecipeCommentNode[]): RecipeCommentNode[] {
     createdAt: n.createdAt instanceof Date ? n.createdAt : new Date(String(n.createdAt)),
     replies: coerceCommentTree(n.replies),
   }));
+}
+
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await props.params;
+  const detail = await getRecipeDetail(slug, null);
+  if (!detail) {
+    return { title: "Recipe" };
+  }
+
+  const { recipe, author, images } = detail;
+  const title = recipe.title?.trim() || "Recipe";
+  const rawDesc = recipe.description?.trim() || "Kosher recipe on Kosher CoShare.";
+  const description = rawDesc.length > 200 ? `${rawDesc.slice(0, 197)}…` : rawDesc;
+  const published = recipe.status === "PUBLISHED";
+
+  const coverStored = recipe.coverImageUrl ?? images[0]?.imageUrl ?? null;
+  const imageHref = published ? socialShareImageHref(coverStored) : DEFAULT_SOCIAL_IMAGE_PATH;
+
+  const authorName = author.username ?? author.name;
+
+  return {
+    title,
+    description,
+    robots: published ? undefined : { index: false, follow: false },
+    alternates: { canonical: `/recipe/${recipe.slug}` },
+    openGraph: {
+      type: "article",
+      siteName: "Kosher CoShare",
+      title,
+      description,
+      url: `/recipe/${recipe.slug}`,
+      images: [{ url: imageHref, alt: title }],
+      ...(published && recipe.publishedAt
+        ? { publishedTime: recipe.publishedAt.toISOString() }
+        : {}),
+      ...(published && authorName ? { authors: [authorName] } : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [imageHref],
+    },
+  };
 }
 
 export default async function RecipePage(props: { params: Promise<{ slug: string }> }) {
@@ -42,7 +92,7 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
   const ingredients = recipe.ingredientsNormalized ?? [];
   const steps = recipe.stepsNormalized ?? [];
 
-  const owner = viewerId === recipe.authorId;
+  const owner = Boolean(viewerId && viewerId === recipe.authorId);
   const canEditRecipe = owner || viewerIsModerator;
 
   return (
@@ -113,9 +163,18 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
             />
             <ShareRecipeButton slug={recipe.slug} />
             {canEditRecipe ? (
-              <Button asChild variant="subtle" className="rounded-2xl">
-                <Link href={`/post?recipeId=${recipe.id}`}>Edit</Link>
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild variant="subtle" className="rounded-2xl">
+                  <Link href={`/post?recipeId=${recipe.id}`}>Edit</Link>
+                </Button>
+                <RecipeRowDeleteButton
+                  recipeId={recipe.id}
+                  title={recipe.title ?? ""}
+                  redirectAfterDelete="/"
+                  className="rounded-2xl"
+                  label="Remove"
+                />
+              </div>
             ) : null}
           </div>
         </div>
