@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Clock, Users } from "lucide-react";
 import type { RecipeCommentNode } from "@/lib/recipes/comment-tree";
 import { DEFAULT_SOCIAL_IMAGE_PATH, socialShareImageHref } from "@/lib/seo/social-share";
+import { canViewRecipeDetail, isRecipePubliclyVisible } from "@/lib/recipes/visibility";
 
 /** Per-user actions (Edit / Remove) depend on `auth()` — must not be statically shared. */
 export const dynamic = "force-dynamic";
@@ -40,16 +41,17 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
   const rawDesc = recipe.description?.trim() || "Kosher recipe on Kosher CoShare.";
   const description = rawDesc.length > 200 ? `${rawDesc.slice(0, 197)}…` : rawDesc;
   const published = recipe.status === "PUBLISHED";
+  const publiclyVisible = isRecipePubliclyVisible(recipe);
 
   const coverStored = recipe.coverImageUrl ?? images[0]?.imageUrl ?? null;
-  const imageHref = published ? socialShareImageHref(coverStored) : DEFAULT_SOCIAL_IMAGE_PATH;
+  const imageHref = publiclyVisible ? socialShareImageHref(coverStored) : DEFAULT_SOCIAL_IMAGE_PATH;
 
   const authorName = author.username ?? author.name;
 
   return {
     title,
     description,
-    robots: published ? undefined : { index: false, follow: false },
+    robots: publiclyVisible ? undefined : { index: false, follow: false },
     alternates: { canonical: `/recipe/${recipe.slug}` },
     openGraph: {
       type: "article",
@@ -83,7 +85,7 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
 
   const { recipe, author, images, badges, tags, hasVoted, bookmarked, commentTree } = detail;
 
-  if (recipe.status === "DRAFT" && recipe.authorId !== viewerId && !viewerIsModerator) {
+  if (!canViewRecipeDetail(recipe, viewerId, viewerIsModerator)) {
     notFound();
   }
 
@@ -152,16 +154,26 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
             </span>
           </div>
 
+          {!isRecipePubliclyVisible(recipe) && owner ? (
+            <p className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--paper)] px-4 py-3 text-sm text-[color:var(--ink-muted)]">
+              This recipe is private — only you can view it. It does not appear in search or on your public profile.
+            </p>
+          ) : null}
+
           <div className="flex flex-wrap gap-3 pt-2">
-            <VoteBookmarkBar
-              recipeId={recipe.id}
-              slug={recipe.slug}
-              initialVotes={recipe.voteCount}
-              initialVoted={hasVoted}
-              initialBookmarked={bookmarked}
-              signedIn={Boolean(session)}
-            />
-            <ShareRecipeButton slug={recipe.slug} />
+            {isRecipePubliclyVisible(recipe) ? (
+              <>
+                <VoteBookmarkBar
+                  recipeId={recipe.id}
+                  slug={recipe.slug}
+                  initialVotes={recipe.voteCount}
+                  initialVoted={hasVoted}
+                  initialBookmarked={bookmarked}
+                  signedIn={Boolean(session)}
+                />
+                <ShareRecipeButton slug={recipe.slug} />
+              </>
+            ) : null}
             {canEditRecipe ? (
               <div className="flex flex-wrap items-center gap-2">
                 <Button asChild variant="subtle" className="rounded-2xl">
@@ -253,14 +265,16 @@ export default async function RecipePage(props: { params: Promise<{ slug: string
         </section>
       ) : null}
 
-      <CommentsPanel
-        recipeId={recipe.id}
-        slug={recipe.slug}
-        signedIn={Boolean(session)}
-        viewerId={viewerId}
-        viewerIsModerator={viewerIsModerator}
-        commentTree={coerceCommentTree(commentTree)}
-      />
+      {isRecipePubliclyVisible(recipe) ? (
+        <CommentsPanel
+          recipeId={recipe.id}
+          slug={recipe.slug}
+          signedIn={Boolean(session)}
+          viewerId={viewerId}
+          viewerIsModerator={viewerIsModerator}
+          commentTree={coerceCommentTree(commentTree)}
+        />
+      ) : null}
     </article>
   );
 }

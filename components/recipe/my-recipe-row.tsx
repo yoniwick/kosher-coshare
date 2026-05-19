@@ -3,12 +3,14 @@ import { Clock, MessageCircle, Heart, Pencil } from "lucide-react";
 import type { AuthorRecipeRow } from "@/lib/recipes/my-recipes";
 import { KosherCategoryBadge } from "@/components/recipe/kosher-badges";
 import { RecipeRowDeleteButton } from "@/components/recipe/recipe-row-delete-button";
+import { RecipeVisibilityControl } from "@/components/recipe/recipe-visibility-control";
 import { Button } from "@/components/ui/button";
 import { blobImageDisplayUrl } from "@/lib/blob/display-url";
 import { cn } from "@/lib/utils";
 
 export function MyRecipeRow({ recipe }: { recipe: AuthorRecipeRow }) {
   const isDraft = recipe.status === "DRAFT";
+  const isPrivatePublished = !isDraft && !recipe.isPublic;
   const coverSrc = recipe.coverImageUrl ? blobImageDisplayUrl(recipe.coverImageUrl) : "";
 
   return (
@@ -34,6 +36,11 @@ export function MyRecipeRow({ recipe }: { recipe: AuthorRecipeRow }) {
             >
               {isDraft ? "Draft" : "Published"}
             </span>
+            {isPrivatePublished ? (
+              <span className="rounded-full bg-[color:var(--paper-2)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--ink-muted)]">
+                Private
+              </span>
+            ) : null}
           </div>
           <h2 className="font-serif text-lg leading-snug text-[color:var(--ink)] sm:text-xl">
             {recipe.title?.trim() || "Untitled recipe"}
@@ -50,6 +57,8 @@ export function MyRecipeRow({ recipe }: { recipe: AuthorRecipeRow }) {
             })}
           </p>
         </div>
+
+        <RecipeVisibilityControl recipeId={recipe.id} isPublic={recipe.isPublic} />
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--line)] pt-3 sm:border-0 sm:pt-0">
           <div className="flex items-center gap-3 text-xs text-[color:var(--ink-muted)]">

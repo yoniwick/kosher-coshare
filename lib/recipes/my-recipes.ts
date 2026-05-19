@@ -9,6 +9,7 @@ export type AuthorRecipeRow = {
   description: string;
   coverImageUrl: string | null;
   status: "DRAFT" | "PUBLISHED";
+  isPublic: boolean;
   kosherCategory: (typeof recipes.$inferSelect)["kosherCategory"];
   updatedAt: Date;
   publishedAt: Date | null;
@@ -27,6 +28,7 @@ export async function listAuthorRecipes(authorId: string): Promise<AuthorRecipeR
       description: recipes.description,
       coverImageUrl: recipes.coverImageUrl,
       status: recipes.status,
+      isPublic: recipes.isPublic,
       kosherCategory: recipes.kosherCategory,
       updatedAt: recipes.updatedAt,
       publishedAt: recipes.publishedAt,

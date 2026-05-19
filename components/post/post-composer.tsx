@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sparkles, UploadCloud, ChevronUp, ChevronDown, GripVertical, Trash2, Loader2 } from "lucide-react";
 import { blobImageDisplayUrl } from "@/lib/blob/display-url";
 import { cn } from "@/lib/utils";
+import { RecipeVisibilityControl } from "@/components/recipe/recipe-visibility-control";
 
 function parseOptionalMinutes(raw: string): number | "" {
   const t = raw.trim();
@@ -69,6 +70,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   const [cookMinutes, setCookMinutes] = useState<number | "">(props.initial?.recipe.cookMinutes ?? "");
   const [servings, setServings] = useState(props.initial?.recipe.servings ?? "");
   const [notes, setNotes] = useState(props.initial?.recipe.notes ?? "");
+  const [isPublic, setIsPublic] = useState(props.initial?.recipe.isPublic ?? true);
 
   const [imageRows, setImageRows] = useState<ComposerImage[]>(() =>
     (props.initial?.images ?? []).map((img) => ({ id: img.id, imageUrl: img.imageUrl }))
@@ -111,6 +113,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
       setCookMinutes(data.recipe.cookMinutes ?? "");
       setServings(data.recipe.servings ?? "");
       setNotes(data.recipe.notes ?? "");
+      setIsPublic(data.recipe.isPublic ?? true);
     });
   }, [props.initial]);
 
@@ -152,6 +155,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     totalMinutes: null as number | null,
     servings: "",
     notes: "",
+    isPublic: true,
   });
 
   useEffect(() => {
@@ -170,6 +174,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
       totalMinutes: derivedTotalMinutes,
       servings,
       notes,
+      isPublic,
     };
   }, [
     recipeId,
@@ -186,6 +191,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     derivedTotalMinutes,
     servings,
     notes,
+    isPublic,
   ]);
 
   useEffect(() => {
@@ -216,6 +222,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
         servings: s.servings || null,
         notes: s.notes || null,
         status: "DRAFT",
+        isPublic: s.isPublic,
       });
     }
 
@@ -388,6 +395,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
           totalMinutes: derivedTotalMinutes,
           servings: servings || null,
           notes: notes || null,
+          isPublic,
         });
 
         if (!res.success || !("slug" in res)) {
@@ -423,6 +431,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
           servings: servings || null,
           notes: notes || null,
           status: "DRAFT",
+          isPublic,
         });
         if (!res.success) {
           toast.error("Could not save draft. Check your entries.");
@@ -806,6 +815,14 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
           <span className="text-sm font-medium">Notes</span>
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
+
+        <RecipeVisibilityControl
+          recipeId={recipeId ?? undefined}
+          isPublic={isPublic}
+          disabled={busy}
+          persistImmediately={false}
+          onChange={setIsPublic}
+        />
 
         <div className="flex flex-wrap gap-3 pt-2">
           <Button type="button" variant="vermilion" className="rounded-2xl" disabled={busy} onClick={() => onPublish()}>

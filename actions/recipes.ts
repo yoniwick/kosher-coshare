@@ -94,6 +94,7 @@ export async function updateDraftAction(input: z.infer<typeof recipeDraftInputSc
         notes: data.notes ?? null,
         ingredientsNormalized: data.ingredientsNormalized ?? [],
         stepsNormalized: data.stepsNormalized ?? [],
+        isPublic: data.isPublic ?? true,
       })
       .returning({ id: recipes.id });
 
@@ -136,6 +137,7 @@ export async function updateDraftAction(input: z.infer<typeof recipeDraftInputSc
       ingredientsNormalized: data.ingredientsNormalized ?? [],
       stepsNormalized: data.stepsNormalized ?? [],
       status: data.status ?? "DRAFT",
+      ...(data.isPublic !== undefined ? { isPublic: data.isPublic } : {}),
       updatedAt: new Date(),
     })
     .where(eq(recipes.id, recipeId));
@@ -252,6 +254,7 @@ export async function publishRecipeAction(input: z.infer<typeof publishRecipeSch
       servings: data.servings,
       notes: data.notes,
       status: "PUBLISHED",
+      isPublic: data.isPublic ?? true,
       publishedAt,
       updatedAt: new Date(),
     })
@@ -264,6 +267,35 @@ export async function publishRecipeAction(input: z.infer<typeof publishRecipeSch
   revalidatePath("/search");
   revalidatePath(`/recipe/${slug}`);
   return { success: true as const, slug };
+}
+
+export async function setRecipeVisibilityAction(recipeId: string, isPublic: boolean) {
+  const { userId, email } = await requireSignedInUser();
+  const database = db();
+
+  const [existing] = await database
+    .select({ id: recipes.id, authorId: recipes.authorId, slug: recipes.slug })
+    .from(recipes)
+    .where(eq(recipes.id, recipeId))
+    .limit(1);
+
+  if (!existing || !isOwnerOrSuperuser(existing.authorId, userId, email)) {
+    throw new Error("Forbidden");
+  }
+
+  await database
+    .update(recipes)
+    .set({ isPublic, updatedAt: new Date() })
+    .where(eq(recipes.id, recipeId));
+
+  revalidatePath("/");
+  revalidatePath("/search");
+  revalidatePath("/my-recipes");
+  revalidatePath("/post");
+  if (existing.slug) {
+    revalidatePath(`/recipe/${existing.slug}`);
+  }
+  return { success: true as const };
 }
 
 export async function deleteRecipeAction(recipeId: string) {

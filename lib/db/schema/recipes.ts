@@ -58,6 +58,7 @@ export const recipes = pgTable(
     difficulty: difficultyEnum("difficulty"),
     mealType: mealTypeEnum("meal_type"),
     status: recipeStatusEnum("status").notNull().default("DRAFT"),
+    isPublic: boolean("is_public").notNull().default(true),
     coverImageUrl: text("cover_image_url"),
     publishedAt: timestamp("published_at", { mode: "date" }),
     commentCount: integer("comment_count").notNull().default(0),

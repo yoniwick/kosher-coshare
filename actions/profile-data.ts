@@ -1,10 +1,11 @@
 "use server";
 
-import { eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema/auth";
 import { recipeReports, recipes } from "@/lib/db/schema/recipes";
+import { publiclyVisibleRecipeFilter } from "@/lib/recipes/visibility";
 
 export async function reportRecipeAction(recipeId: string, reason: string) {
   const session = await auth();
@@ -47,6 +48,7 @@ export async function getProfileBundle(username: string) {
       commentCount: recipes.commentCount,
       publishedAt: recipes.publishedAt,
       status: recipes.status,
+      isPublic: recipes.isPublic,
       kosherCategory: recipes.kosherCategory,
       totalMinutes: recipes.totalMinutes,
     })
@@ -60,7 +62,7 @@ export async function getProfileBundle(username: string) {
       likesReceived: sql<number>`coalesce(sum(${recipes.voteCount}), 0)::int`,
     })
     .from(recipes)
-    .where(eq(recipes.authorId, user.id));
+    .where(and(eq(recipes.authorId, user.id), publiclyVisibleRecipeFilter));
 
   return {
     user,

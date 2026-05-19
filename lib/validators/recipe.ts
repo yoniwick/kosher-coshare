@@ -40,6 +40,7 @@ export const recipeDraftInputSchema = z.object({
   difficulty: difficultySchema.nullable().optional(),
   mealType: mealTypeSchema.nullable().optional(),
   status: recipeStatusSchema.optional(),
+  isPublic: z.boolean().optional(),
 });
 
 export const publishRecipeSchema = z.object({
@@ -70,6 +71,7 @@ export const publishRecipeSchema = z.object({
   cuisine: z.string().max(80).nullable().optional(),
   difficulty: difficultySchema.nullable().optional(),
   mealType: mealTypeSchema.nullable().optional(),
+  isPublic: z.boolean().optional().default(true),
 });
 
 export const profileUpdateSchema = z.object({

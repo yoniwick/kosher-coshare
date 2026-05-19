@@ -9,6 +9,7 @@ import { notifications } from "@/lib/db/schema/notifications";
 import { bookmarks, comments, recipes, votes } from "@/lib/db/schema/recipes";
 import { commentBodySchema, commentEditSchema } from "@/lib/validators/recipe";
 import { rateLimitSync } from "@/lib/rate-limit";
+import { isRecipePubliclyVisible } from "@/lib/recipes/visibility";
 
 async function requireUserId() {
   const { userId } = await requireSignedInUser();
@@ -20,12 +21,18 @@ export async function toggleVoteAction(recipeId: string) {
   const database = db();
 
   const [recipe] = await database
-    .select({ id: recipes.id, authorId: recipes.authorId, slug: recipes.slug, status: recipes.status })
+    .select({
+      id: recipes.id,
+      authorId: recipes.authorId,
+      slug: recipes.slug,
+      status: recipes.status,
+      isPublic: recipes.isPublic,
+    })
     .from(recipes)
     .where(eq(recipes.id, recipeId))
     .limit(1);
 
-  if (!recipe || recipe.status !== "PUBLISHED") {
+  if (!recipe || !isRecipePubliclyVisible(recipe)) {
     throw new Error("Recipe not found");
   }
 
@@ -72,12 +79,12 @@ export async function toggleBookmarkAction(recipeId: string) {
   const database = db();
 
   const [recipe] = await database
-    .select({ slug: recipes.slug, status: recipes.status })
+    .select({ slug: recipes.slug, status: recipes.status, isPublic: recipes.isPublic })
     .from(recipes)
     .where(eq(recipes.id, recipeId))
     .limit(1);
 
-  if (!recipe || recipe.status !== "PUBLISHED") throw new Error("Recipe not found");
+  if (!recipe || !isRecipePubliclyVisible(recipe)) throw new Error("Recipe not found");
 
   const [existing] = await database
     .select()
@@ -138,12 +145,17 @@ export async function addCommentAction(input: unknown) {
   const parentId = parsed.data.parentId;
 
   const [recipe] = await database
-    .select({ slug: recipes.slug, status: recipes.status, authorId: recipes.authorId })
+    .select({
+      slug: recipes.slug,
+      status: recipes.status,
+      isPublic: recipes.isPublic,
+      authorId: recipes.authorId,
+    })
     .from(recipes)
     .where(eq(recipes.id, recipeId))
     .limit(1);
 
-  if (!recipe || recipe.status !== "PUBLISHED") {
+  if (!recipe || !isRecipePubliclyVisible(recipe)) {
     return { success: false as const, error: "Recipe not available." };
   }
 

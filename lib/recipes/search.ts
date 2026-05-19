@@ -64,7 +64,7 @@ export async function searchRecipes(
   const offset = Number.parseInt(raw.cursor ?? "0", 10) || 0;
 
   const tok = tokenize(raw.q);
-  const conditions: SQL[] = [eq(recipes.status, "PUBLISHED")];
+  const conditions: SQL[] = [eq(recipes.status, "PUBLISHED"), eq(recipes.isPublic, true)];
 
   if (tok.length > 0) {
     for (const t of tok) {

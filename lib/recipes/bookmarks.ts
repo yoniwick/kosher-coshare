@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { bookmarks, recipes, recipeSpecialBadges } from "@/lib/db/schema/recipes";
 import { users } from "@/lib/db/schema/auth";
 import type { RecipeSearchRow } from "@/lib/recipes/search";
+import { publiclyVisibleRecipeFilter } from "@/lib/recipes/visibility";
 
 export async function listBookmarkedRecipes(userId: string): Promise<RecipeSearchRow[]> {
   const database = db();
@@ -17,7 +18,7 @@ export async function listBookmarkedRecipes(userId: string): Promise<RecipeSearc
     .from(bookmarks)
     .innerJoin(recipes, eq(bookmarks.recipeId, recipes.id))
     .innerJoin(users, eq(recipes.authorId, users.id))
-    .where(and(eq(bookmarks.userId, userId), eq(recipes.status, "PUBLISHED")))
+    .where(and(eq(bookmarks.userId, userId), publiclyVisibleRecipeFilter))
     .orderBy(desc(bookmarks.createdAt))
     .limit(48);
 

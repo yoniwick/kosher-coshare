@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getProfileBundle } from "@/actions/profile-data";
 import { RecipeCard } from "@/components/recipe/recipe-card";
 import type { RecipeSearchRow } from "@/lib/recipes/search";
+import { isRecipePubliclyVisible } from "@/lib/recipes/visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function PublicProfilePage(props: { params: Promise<{ usern
   if (!bundle) notFound();
 
   const cards: RecipeSearchRow[] = bundle.recipes
-    .filter((r) => r.status === "PUBLISHED")
+    .filter((r) => isRecipePubliclyVisible(r))
     .map((r) => ({
       id: r.id,
       slug: r.slug,
@@ -56,7 +57,7 @@ export default async function PublicProfilePage(props: { params: Promise<{ usern
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="rounded-2xl bg-[color:var(--paper)] px-4 py-3">
             <div className="text-xs uppercase tracking-wide text-[color:var(--ink-muted)]">Recipes</div>
-            <div className="font-semibold">{bundle.recipes.filter((r) => r.status === "PUBLISHED").length}</div>
+            <div className="font-semibold">{bundle.recipes.filter((r) => isRecipePubliclyVisible(r)).length}</div>
           </div>
           <div className="rounded-2xl bg-[color:var(--paper)] px-4 py-3">
             <div className="text-xs uppercase tracking-wide text-[color:var(--ink-muted)]">Likes received</div>
