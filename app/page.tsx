@@ -3,6 +3,7 @@ import { searchRecipes } from "@/lib/recipes/search";
 import { RecipeCard } from "@/components/recipe/recipe-card";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
+import { AppTourLink } from "@/components/onboarding/app-tour";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default async function HomePage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button asChild variant="vermilion" size="lg" className="rounded-2xl">
             <Link href="/post">
               <Sparkles className="h-5 w-5" />
@@ -36,6 +37,7 @@ export default async function HomePage() {
           <Button asChild variant="outline" size="lg" className="rounded-2xl bg-white/60">
             <Link href="/search">Search the library</Link>
           </Button>
+          <AppTourLink />
         </div>
       </header>
 
