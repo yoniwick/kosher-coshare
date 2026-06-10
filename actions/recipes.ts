@@ -136,7 +136,7 @@ export async function updateDraftAction(input: z.infer<typeof recipeDraftInputSc
       notes: data.notes ?? null,
       ingredientsNormalized: data.ingredientsNormalized ?? [],
       stepsNormalized: data.stepsNormalized ?? [],
-      status: data.status ?? "DRAFT",
+      ...(data.status !== undefined ? { status: data.status } : {}),
       ...(data.isPublic !== undefined ? { isPublic: data.isPublic } : {}),
       updatedAt: new Date(),
     })
@@ -230,7 +230,7 @@ export async function publishRecipeAction(input: z.infer<typeof publishRecipeSch
   }
 
   let slug = row.slug;
-  if (row.status === "DRAFT") {
+  if (row.status === "DRAFT" && !row.publishedAt) {
     slug = makeRecipeSlug(data.title);
   }
 

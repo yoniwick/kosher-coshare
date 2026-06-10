@@ -71,6 +71,9 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
   const [servings, setServings] = useState(props.initial?.recipe.servings ?? "");
   const [notes, setNotes] = useState(props.initial?.recipe.notes ?? "");
   const [isPublic, setIsPublic] = useState(props.initial?.recipe.isPublic ?? true);
+  const [recipeStatus, setRecipeStatus] = useState<"DRAFT" | "PUBLISHED">(
+    props.initial?.recipe.status ?? "DRAFT"
+  );
 
   const [imageRows, setImageRows] = useState<ComposerImage[]>(() =>
     (props.initial?.images ?? []).map((img) => ({ id: img.id, imageUrl: img.imageUrl }))
@@ -114,6 +117,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
       setServings(data.recipe.servings ?? "");
       setNotes(data.recipe.notes ?? "");
       setIsPublic(data.recipe.isPublic ?? true);
+      setRecipeStatus(data.recipe.status);
     });
   }, [props.initial]);
 
@@ -156,6 +160,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     servings: "",
     notes: "",
     isPublic: true,
+    recipeStatus: "DRAFT" as "DRAFT" | "PUBLISHED",
   });
 
   useEffect(() => {
@@ -175,6 +180,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
       servings,
       notes,
       isPublic,
+      recipeStatus,
     };
   }, [
     recipeId,
@@ -192,6 +198,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
     servings,
     notes,
     isPublic,
+    recipeStatus,
   ]);
 
   useEffect(() => {
@@ -221,7 +228,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
         totalMinutes: s.totalMinutes,
         servings: s.servings || null,
         notes: s.notes || null,
-        status: "DRAFT",
+        status: s.recipeStatus,
         isPublic: s.isPublic,
       });
     }
@@ -403,7 +410,8 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
           return;
         }
 
-        toast.success("Published!");
+        setRecipeStatus("PUBLISHED");
+        toast.success(recipeStatus === "PUBLISHED" ? "Changes saved!" : "Published!");
         window.location.href = `/recipe/${res.slug}`;
       } catch {
         toast.error("Publish failed");
@@ -437,6 +445,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
           toast.error("Could not save draft. Check your entries.");
           return;
         }
+        setRecipeStatus("DRAFT");
         toast.success("Draft saved.");
         router.push("/my-recipes");
       } catch {
@@ -826,7 +835,7 @@ export function PostComposer(props: { initial: InitialData | null; signedIn: boo
 
         <div className="flex flex-wrap gap-3 pt-2">
           <Button type="button" variant="vermilion" className="rounded-2xl" disabled={busy} onClick={() => onPublish()}>
-            Publish
+            {recipeStatus === "PUBLISHED" ? "Save changes" : "Publish"}
           </Button>
         </div>
         <p className="text-xs text-[color:var(--ink-muted)]">
